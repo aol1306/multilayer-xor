@@ -3,7 +3,9 @@ extern crate rand;
 use rand::Rng;
 
 static LAMBDA: f64 = 1.0;
-static MAX_LEARNING_EPOCH: usize = 10000;
+static MAX_LEARNING_EPOCH: usize = 100000;
+
+static MOMENTUM: f64 = 1.0;
 
 #[derive(Debug)]
 struct Network {
@@ -107,21 +109,23 @@ impl Network {
         // recalculate weights for first layer
         for (neuron_num, neuron) in self.layers[0].iter_mut().enumerate() {
             for (weight_num, weight) in neuron.weights.iter_mut().enumerate() {
-                *weight = *weight + self.alpha * errors[0][neuron_num] * input[weight_num];
+                *weight =
+                    MOMENTUM * (*weight + self.alpha * errors[0][neuron_num] * input[weight_num]);
             }
-            neuron.bias = neuron.bias + self.alpha * errors[0][neuron_num];
+            neuron.bias = MOMENTUM * (neuron.bias + self.alpha * errors[0][neuron_num]);
         }
 
         // recalculate weights for all other layers
         for layer_num in 1..self.layers.len() {
             for (neuron_num, neuron) in self.layers[layer_num].iter_mut().enumerate() {
                 for (weight_num, weight) in neuron.weights.iter_mut().enumerate() {
-                    *weight = *weight
-                        + self.alpha
-                            * errors[layer_num][neuron_num]
-                            * all_neuron_outs[layer_num - 1][weight_num];
+                    *weight = MOMENTUM
+                        * (*weight
+                            + self.alpha
+                                * errors[layer_num][neuron_num]
+                                * all_neuron_outs[layer_num - 1][weight_num]);
                 }
-                neuron.bias = neuron.bias + self.alpha * errors[layer_num][neuron_num];
+                neuron.bias = MOMENTUM * (neuron.bias + self.alpha * errors[layer_num][neuron_num]);
             }
         }
     }
@@ -134,7 +138,7 @@ impl Network {
         return net_error / 2.0;
     }
 
-    pub fn start_learning(&mut self, mut training_set: Vec<TrainingData>) {
+    pub fn start_learning(&mut self, mut training_set: Vec<TrainingData>, stop_error: f64) {
         let mut rng = rand::thread_rng();
         for i in 0..MAX_LEARNING_EPOCH {
             println!("Epoch {}", i);
@@ -147,11 +151,16 @@ impl Network {
                     &training.expected,
                     &out,
                 );
-                epoch_error += Network::calculate_network_error(&training.expected, &out.last().unwrap());
+                epoch_error +=
+                    Network::calculate_network_error(&training.expected, &out.last().unwrap());
             }
             rng.shuffle(&mut training_set);
             println!("Epoch error: {}", epoch_error);
+            if epoch_error < stop_error {
+                break;
+            }
         }
+        println!("Learning completed");
     }
 }
 
@@ -372,12 +381,24 @@ impl TrainingData {
 }
 
 fn main() {
-    let mut network = Network::new(1.0, vec![2, 1], 2);
+    let mut network = Network::new(0.3, vec![2, 1], 2);
     let training_data = TrainingData::generate_for_xor();
-    network.start_learning(training_data);
+    network.start_learning(training_data, 0.01);
     let verification_data = TrainingData::generate_for_xor();
-    println!("Should be 0: {:?}", network.calculate_network_output(&verification_data[0].inputs));
-    println!("Should be 1: {:?}", network.calculate_network_output(&verification_data[1].inputs));
-    println!("Should be 1: {:?}", network.calculate_network_output(&verification_data[2].inputs));
-    println!("Should be 0: {:?}", network.calculate_network_output(&verification_data[3].inputs));
+    println!(
+        "Should be 0: {:?}",
+        network.calculate_network_output(&verification_data[0].inputs)
+    );
+    println!(
+        "Should be 1: {:?}",
+        network.calculate_network_output(&verification_data[1].inputs)
+    );
+    println!(
+        "Should be 1: {:?}",
+        network.calculate_network_output(&verification_data[2].inputs)
+    );
+    println!(
+        "Should be 0: {:?}",
+        network.calculate_network_output(&verification_data[3].inputs)
+    );
 }
