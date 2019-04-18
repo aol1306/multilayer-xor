@@ -3,6 +3,7 @@ extern crate rand;
 use rand::Rng;
 
 static LAMBDA: f64 = 1.0;
+static MAX_LEARNING_EPOCH: usize = 10000;
 
 #[derive(Debug)]
 struct Network {
@@ -76,7 +77,7 @@ impl Network {
 
         // output layer
         errors.push(Vec::new());
-        for (i, neuron) in self.layers.last().unwrap().iter().enumerate() {
+        for (i, _neuron) in self.layers.last().unwrap().iter().enumerate() {
             // neuron error
             let e = (expected[i] - received[i]) * Neuron::derived_activation(received[i]);
             errors[0].push(e);
@@ -87,7 +88,7 @@ impl Network {
             for layer_number in (0..self.layers.len() - 1).rev() {
                 // from last layer to input
                 errors.push(Vec::new());
-                for (neuron_num, neuron) in self.layers[layer_number].iter().enumerate() {
+                for (neuron_num, _neuron) in self.layers[layer_number].iter().enumerate() {
                     let mut e = 0.0;
                     let errors_last = errors.len() - 1;
                     for i in 0..self.layers[layer_number + 1].len() {
@@ -125,12 +126,32 @@ impl Network {
         }
     }
 
-    pub fn calculate_network_error(expected: Vec<f64>, received: Vec<f64>) -> f64 {
+    pub fn calculate_network_error(expected: &Vec<f64>, received: &Vec<f64>) -> f64 {
         let mut net_error = 0.0;
         for i in 0..expected.len() {
             net_error += (expected[i] - received[i]).powf(2.0);
         }
         return net_error / 2.0;
+    }
+
+    pub fn start_learning(&mut self, mut training_set: Vec<TrainingData>) {
+        let mut rng = rand::thread_rng();
+        for i in 0..MAX_LEARNING_EPOCH {
+            println!("Epoch {}", i);
+            let mut epoch_error = 0.0;
+            for training in training_set.iter() {
+                let out = self.calculate_network_output_full(&training.inputs);
+                self.recalculate_weights(
+                    &training.inputs,
+                    out.last().unwrap(),
+                    &training.expected,
+                    &out,
+                );
+                epoch_error += Network::calculate_network_error(&training.expected, &out.last().unwrap());
+            }
+            rng.shuffle(&mut training_set);
+            println!("Epoch error: {}", epoch_error);
+        }
     }
 }
 
@@ -239,7 +260,7 @@ fn test_recalculate_weights() {
 
 #[test]
 fn test_calculate_network_error() {
-    let err = Network::calculate_network_error(vec![0.0, 1.0], vec![0.0, 0.0]);
+    let err = Network::calculate_network_error(&vec![0.0, 1.0], &vec![0.0, 0.0]);
     assert_eq!(err, 0.5);
 }
 
@@ -352,21 +373,11 @@ impl TrainingData {
 
 fn main() {
     let mut network = Network::new(1.0, vec![2, 1], 2);
-    network.layers[0][0].weights = vec![1.0, 1.0];
-    network.layers[0][0].bias = 0.0;
-    network.layers[0][1].weights = vec![1.0, 1.0];
-    network.layers[0][1].bias = 0.0;
-    network.layers[1][0].weights = vec![1.0, 1.0];
-    network.layers[1][0].bias = 0.0;
-
-    let input = vec![0.0, 0.0];
-    let full_output = network.calculate_network_output_full(&input);
-    network.recalculate_weights(
-        &input,
-        full_output.last().unwrap(),
-        &vec![0.0],
-        &full_output,
-    );
-
-    println!("{:?}", network);
+    let training_data = TrainingData::generate_for_xor();
+    network.start_learning(training_data);
+    let verification_data = TrainingData::generate_for_xor();
+    println!("Should be 0: {:?}", network.calculate_network_output(&verification_data[0].inputs));
+    println!("Should be 1: {:?}", network.calculate_network_output(&verification_data[1].inputs));
+    println!("Should be 1: {:?}", network.calculate_network_output(&verification_data[2].inputs));
+    println!("Should be 0: {:?}", network.calculate_network_output(&verification_data[3].inputs));
 }
