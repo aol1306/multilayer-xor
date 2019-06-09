@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 rand = "*"
+
+[lib]
+name = "multilayer"
+crate-type = ["rlib", "dylib"]
